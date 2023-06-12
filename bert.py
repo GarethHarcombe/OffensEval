@@ -12,6 +12,7 @@ import pandas as pd
 from eval import print_results
 import itertools
 from dataloader import get_dfs
+from statistics import stdev
 
 
 DATA_DIR = "/csse/users/grh102/Documents/cosc442/OffensEval/OLID/"
@@ -87,7 +88,6 @@ class BertClassifier(nn.Module):
             self.linear = nn.Linear(256*2, len(LABELS))
 
     def forward(self, input_id, mask):
-        
         last_hidden, pooled_output = self.bert(input_ids=input_id, attention_mask=mask,return_dict=False)
         if self.classification == "lstm":
             # https://stackoverflow.com/questions/65205582/how-can-i-add-a-bi-lstm-layer-on-top-of-bert-model
@@ -224,34 +224,44 @@ def evaluate(model, test_data):
     test_labels = [label.cpu().detach().numpy() for label in test_labels]
     test_labels = list(itertools.chain.from_iterable(test_labels))
     
-    print_results(test_labels, preds)
-    
     print(f'Test Accuracy: {total_acc_test / len(test_data): .3f}')
+
+    return print_results(test_labels, preds)
+
+
+def test_many(df_train, df_val, df_test, classification, pooling_method):
+    EPOCHS = 2
+    LR = 1e-6
+    
+    results = []
+    for i in range(5):
+        model = BertClassifier(classification=classification, pooling_method=pooling_method)
+        train(model, df_train, df_val, LR, EPOCHS)
+        results.append(evaluate(model, df_test))
+
+    print(f"Results: {results} \n Mean: {sum(results)/len(results)} \n Stdev: {stdev(results)}")
+
+    with open("bert_results.txt", 'a') as f:
+        f.write("training bert with {} classification method, and {} pooling\n".format(classification, pooling_method))
+        f.write(f"Results: {results} \nMean: {sum(results)/len(results)} \nStdev: {stdev(results)}")
 
 
 def main():
     logging.set_verbosity_error()
 
     df_train, df_val, df_test = get_dfs()
-    
-    EPOCHS = 2
-    LR = 1e-6
 
     classification = "regression"
     for pooling_method in ["sum", "clt", "average", "max"]:
         print("training BERT with {} classification method, and {} pooling".format(classification, pooling_method))
-        model = BertClassifier(classification=classification, pooling_method=pooling_method)
-        train(model, df_train, df_val, LR, EPOCHS)
-        evaluate(model, df_test)
-        torch.save(model.state_dict(), MODEL_DIR + "bert_" + classification + "_" + pooling_method + ".pth")
+        test_many(df_train, df_val, df_test, classification, pooling_method)
+        # torch.save(model.state_dict(), MODEL_DIR + "bert_" + classification + "_" + pooling_method + ".pth")
 
     classification = "lstm"
     for pooling_method in ["clt", "all"]:
         print("training BERT with {} classification method, and {} pooling".format(classification, pooling_method))
-        model = BertClassifier(classification=classification, pooling_method=pooling_method)
-        train(model, df_train, df_val, LR, EPOCHS)
-        evaluate(model, df_test)
-        torch.save(model.state_dict(), MODEL_DIR + "bert_" + classification + ".pth")
+        test_many(df_train, df_val, df_test, classification, pooling_method)
+        # torch.save(model.state_dict(), MODEL_DIR + "bert_" + classification + ".pth")
 
 
 if __name__ == "__main__":

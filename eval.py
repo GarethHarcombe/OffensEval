@@ -17,3 +17,4 @@ def print_results(test_labels, preds):
     print("Accuracy: {:.4f}".format((tn + tp) / len(preds)))
     print("Confusion matrix: \n", results)
     print("F1: {:.4f}".format(f1_score(test_labels, preds, average="macro")))
+    return f1_score(test_labels, preds, average="macro")
